@@ -78,7 +78,8 @@ jobs:
             liblcms2-dev \
             cpio \
             mercurial \
-            ca-certificates
+            ca-certificates \
+            docker.io
 
           echo ""
           echo "=========================================="
@@ -98,9 +99,47 @@ jobs:
 
           sudo apt-get install -y openjdk-17-jdk
 
+          sudo update-alternatives \
+            --set java \
+            /usr/lib/jvm/java-17-openjdk-amd64/bin/java
+
+          sudo update-alternatives \
+            --set javac \
+            /usr/lib/jvm/java-17-openjdk-amd64/bin/javac
+
+          export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
+
+          echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+
+          echo ""
+          echo "Java:"
           java -version
 
+          echo ""
+          echo "Javac:"
           javac -version
+
+
+      # ==========================================
+      # START DOCKER
+      # ==========================================
+
+      - name: Start Docker
+        shell: bash
+        run: |
+
+          set -e
+
+          sudo systemctl start docker
+
+          sudo systemctl enable docker
+
+          docker --version
+
+          echo ""
+          echo "=========================================="
+          echo "Docker started"
+          echo "=========================================="
 
 
       # ==========================================
@@ -169,7 +208,7 @@ jobs:
 
           echo ""
           echo "=========================================="
-          echo "Checking Android NDK"
+          echo "Checking Android NDK r29"
           echo "=========================================="
 
           echo "Expected NDK:"
@@ -344,67 +383,13 @@ jobs:
           echo "Java:"
           java -version
 
-
-          # ======================================
-          # FIX TERMUX ARCHITECTURE STATE
-          # ======================================
-
           echo ""
-          echo "Fixing Termux architecture state..."
+          echo "Starting Termux Docker build..."
 
-          TERMUX_ARCH_FILE="$RUNNER_TEMP/TERMUX_ARCH"
+          chmod +x scripts/run-docker.sh
 
-          echo "aarch64" > "$TERMUX_ARCH_FILE"
-
-          echo ""
-          echo "Architecture file:"
-          cat "$TERMUX_ARCH_FILE"
-
-
-          # ======================================
-          # PATCH ONLY TERMUX_ARCH PATH
-          # ======================================
-
-          if grep -q '/data/TERMUX_ARCH' \
-            scripts/build/termux_step_handle_buildarch.sh; then
-
-            echo ""
-            echo "Patching termux_step_handle_buildarch.sh..."
-
-            sed -i \
-              "s#/data/TERMUX_ARCH#$TERMUX_ARCH_FILE#g" \
-              scripts/build/termux_step_handle_buildarch.sh
-
-          fi
-
-
-          echo ""
-          echo "Architecture handler:"
-
-          grep -n "TERMUX_ARCH" \
-            scripts/build/termux_step_handle_buildarch.sh \
-            || true
-
-
-          # ======================================
-          # DO NOT OVERRIDE HOME / PREFIX / DATA
-          # ======================================
-
-          unset TERMUX_APP__DATA_DIR || true
-          unset TERMUX__PROJECT_DIR || true
-          unset TERMUX__ROOTFS || true
-          unset TERMUX__HOME || true
-          unset TERMUX__PREFIX || true
-
-
-          # ======================================
-          # BUILD
-          # ======================================
-
-          echo ""
-          echo "Starting Termux build..."
-
-          ./build-package.sh \
+          ./scripts/run-docker.sh \
+            ./build-package.sh \
             -a aarch64 \
             -f \
             -I \
@@ -631,7 +616,7 @@ jobs:
 
 
       # ==========================================
-      # FIX PERMISSIONS
+      # FIX EXECUTABLE PERMISSIONS
       # ==========================================
 
       - name: Fix executable permissions

@@ -1,0 +1,183 @@
+name: Android SDK Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+
+  build-sdk:
+    name: Build Android SDK ZIP
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ============================================
+      # CHECKOUT
+      # ============================================
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+
+      # ============================================
+      # JAVA
+      # ============================================
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+
+      # ============================================
+      # ANDROID SDK
+      # ============================================
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+
+      # ============================================
+      # ACCEPT LICENSES
+      # ============================================
+
+      - name: Accept Android licenses
+        run: |
+          yes | sdkmanager --licenses || true
+
+
+      # ============================================
+      # INSTALL SDK COMPONENTS
+      # ============================================
+
+      - name: Install Android SDK components
+        run: |
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+
+      # ============================================
+      # CREATE PACKAGE DIRECTORY
+      # ============================================
+
+      - name: Prepare SDK package
+        run: |
+
+          rm -rf android-sdk
+
+          mkdir -p android-sdk
+
+          cp -R "$ANDROID_HOME/platform-tools" \
+            android-sdk/
+
+          mkdir -p android-sdk/build-tools
+
+          cp -R "$ANDROID_HOME/build-tools/35.0.0" \
+            android-sdk/build-tools/
+
+          mkdir -p android-sdk/platforms
+
+          cp -R "$ANDROID_HOME/platforms/android-35" \
+            android-sdk/platforms/
+
+
+      # ============================================
+      # CHECK STRUCTURE
+      # ============================================
+
+      - name: Check SDK structure
+        run: |
+
+          echo "================================"
+          echo "SDK STRUCTURE"
+          echo "================================"
+
+          find android-sdk -maxdepth 3 -type d | sort
+
+          echo ""
+          echo "Required files:"
+
+          test -f \
+            android-sdk/platforms/android-35/android.jar
+
+          test -d \
+            android-sdk/build-tools/35.0.0
+
+          test -d \
+            android-sdk/platform-tools
+
+          echo ""
+          echo "SDK structure OK."
+
+
+      # ============================================
+      # CREATE ZIP
+      # ============================================
+
+      - name: Create android-sdk.zip
+        run: |
+
+          cd android-sdk
+
+          zip -r ../android-sdk.zip .
+
+          cd ..
+
+          echo ""
+          echo "ZIP created:"
+          ls -lh android-sdk.zip
+
+
+      # ============================================
+      # CHECK ZIP
+      # ============================================
+
+      - name: Verify ZIP
+        run: |
+
+          echo "================================"
+          echo "ZIP CONTENT"
+          echo "================================"
+
+          unzip -l android-sdk.zip | head -100
+
+          echo ""
+          echo "ZIP size:"
+          du -h android-sdk.zip
+
+
+      # ============================================
+      # CREATE RELEASE
+      # ============================================
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+
+        with:
+
+          tag_name: v1.0.0
+
+          name: Android SDK 35
+
+          body: |
+            Android SDK package for AndroidAIDE.
+
+            SDK Platform:
+            android-35
+
+            Build Tools:
+            35.0.0
+
+            Platform Tools:
+            Included
+
+          files: |
+            android-sdk.zip
+
+          make_latest: true

@@ -121,40 +121,9 @@ jobs:
           echo "Java 17"
           echo "=========================================="
 
-          echo ""
-          echo "JAVA_HOME:"
-          echo "/usr/lib/jvm/java-17-openjdk-amd64"
-
-          echo ""
-          echo "Java:"
           java -version
 
-          echo ""
-          echo "Javac:"
           javac -version
-
-
-      # ==========================================
-      # VERIFY DOCKER
-      # ==========================================
-
-      - name: Verify Docker
-        shell: bash
-        run: |
-
-          set -e
-
-          echo ""
-          echo "=========================================="
-          echo "Checking Docker"
-          echo "=========================================="
-
-          docker --version
-
-          docker info
-
-          echo ""
-          echo "Docker is ready."
 
 
       # ==========================================
@@ -226,29 +195,19 @@ jobs:
           echo "Checking Android NDK r29"
           echo "=========================================="
 
-          echo "Expected NDK:"
+          echo "Expected:"
           echo "$NDK_DIR"
 
           if [ ! -d "$NDK_DIR" ]; then
-
-            echo ""
             echo "ERROR: Android NDK r29 was not installed."
-
             exit 1
-
           fi
 
           if [ ! -f "$NDK_DIR/source.properties" ]; then
-
-            echo ""
-            echo "ERROR: NDK source.properties missing."
-
+            echo "ERROR: source.properties missing."
             exit 1
-
           fi
 
-          echo ""
-          echo "NDK source.properties:"
           cat "$NDK_DIR/source.properties"
 
           echo ""
@@ -256,7 +215,7 @@ jobs:
 
 
       # ==========================================
-      # EXPORT SDK / NDK
+      # CONFIGURE ENVIRONMENT
       # ==========================================
 
       - name: Configure Android build environment
@@ -323,7 +282,8 @@ jobs:
           javac -version
 
           echo ""
-          echo "NDK:"
+          echo "Checking NDK..."
+
           test -d "$NDK"
 
           echo "NDK exists."
@@ -364,9 +324,7 @@ jobs:
           cd termux-packages
 
           export TERMUX_ARCH=aarch64
-
           export TERMUX_FORCE_BUILD=true
-
           export TERMUX_INSTALL_DEPS=true
 
           echo ""
@@ -412,10 +370,13 @@ jobs:
 
           echo ""
           echo "=========================================="
-          echo "Searching for OpenJDK packages"
+          echo "Searching for OpenJDK 17 package"
           echo "=========================================="
 
-          find termux-packages/output \
+          echo ""
+          echo "Searching entire Termux tree..."
+
+          find termux-packages \
             -type f \
             \( \
               -name "*openjdk*17*.deb" \
@@ -424,9 +385,7 @@ jobs:
             \) \
             -print || true
 
-          echo ""
-
-          PACKAGE=$(find termux-packages/output \
+          PACKAGE=$(find termux-packages \
             -type f \
             -name "*openjdk*17*.deb" \
             -print -quit)
@@ -437,11 +396,12 @@ jobs:
             echo "ERROR: OpenJDK 17 package was not generated."
 
             echo ""
-            echo "Output directory:"
+            echo "Searching output directories..."
 
-            find termux-packages/output \
-              -maxdepth 3 \
+            find termux-packages \
+              -maxdepth 6 \
               -type f \
+              -name "*.deb" \
               -print || true
 
             exit 1
@@ -449,10 +409,17 @@ jobs:
           fi
 
           echo ""
-          echo "OpenJDK package:"
+          echo "=========================================="
+          echo "OpenJDK package found"
+          echo "=========================================="
+
           echo "$PACKAGE"
 
-          echo "$PACKAGE" > "$GITHUB_WORKSPACE/openjdk_package_path.txt"
+          cp "$PACKAGE" "$GITHUB_WORKSPACE/openjdk-17-arm64.deb"
+
+          echo ""
+          echo "Copied package:"
+          ls -lh "$GITHUB_WORKSPACE/openjdk-17-arm64.deb"
 
 
       # ==========================================
@@ -471,28 +438,20 @@ jobs:
           echo "=========================================="
 
           rm -rf output
-
-          mkdir -p output/jdk-17
-
-          PACKAGE=$(cat openjdk_package_path.txt)
-
-          echo ""
-          echo "Package:"
-          echo "$PACKAGE"
-
           rm -rf extracted-jdk
 
+          mkdir -p output/jdk-17
           mkdir -p extracted-jdk
 
           echo ""
-          echo "Extracting .deb..."
+          echo "Extracting package..."
 
           dpkg-deb -x \
-            "$PACKAGE" \
+            openjdk-17-arm64.deb \
             extracted-jdk
 
           echo ""
-          echo "Searching extracted JDK..."
+          echo "Searching for Java..."
 
           JDK_BIN=$(find extracted-jdk \
             -type f \
@@ -502,13 +461,13 @@ jobs:
           if [ -z "$JDK_BIN" ]; then
 
             echo ""
-            echo "ERROR: bin/java not found inside OpenJDK package."
+            echo "ERROR: bin/java not found."
 
             echo ""
-            echo "Extracted files:"
+            echo "Extracted directory:"
 
             find extracted-jdk \
-              -maxdepth 7 \
+              -maxdepth 8 \
               -type f \
               | head -300 || true
 
@@ -516,8 +475,11 @@ jobs:
 
           fi
 
-          JDK_DIR=$(dirname "$JDK_BIN")
+          echo ""
+          echo "Java binary:"
+          echo "$JDK_BIN"
 
+          JDK_DIR=$(dirname "$JDK_BIN")
           JDK_DIR=$(dirname "$JDK_DIR")
 
           echo ""
@@ -529,7 +491,7 @@ jobs:
             output/jdk-17/
 
           echo ""
-          echo "JDK copied."
+          echo "JDK copied successfully."
 
 
       # ==========================================
@@ -555,30 +517,17 @@ jobs:
             -print | head -150
 
           echo ""
-          echo "Checking Java..."
 
           if [ ! -f "$JDK/bin/java" ]; then
-
-            echo ""
             echo "ERROR: bin/java missing."
-
             exit 1
-
           fi
-
-          echo ""
-          echo "Checking Javac..."
 
           if [ ! -f "$JDK/bin/javac" ]; then
-
-            echo ""
             echo "ERROR: bin/javac missing."
-
             exit 1
-
           fi
 
-          echo ""
           echo "Java:"
           ls -lh "$JDK/bin/java"
 
@@ -604,13 +553,11 @@ jobs:
           echo "Cleaning JDK"
           echo "=========================================="
 
-
           rm -rf \
             "$JDK/man" \
             "$JDK/demo" \
             "$JDK/sample" \
             "$JDK/include"
-
 
           find "$JDK" \
             -type f \
@@ -621,13 +568,11 @@ jobs:
             \) \
             -delete
 
-
           find "$JDK" \
             -type d \
             -name "__pycache__" \
             -prune \
             -exec rm -rf {} \;
-
 
           echo ""
           echo "JDK cleaned."
@@ -652,11 +597,8 @@ jobs:
           echo ""
           echo "Executable permissions fixed."
 
-          ls -lh \
-            "$JDK/bin/java"
-
-          ls -lh \
-            "$JDK/bin/javac"
+          ls -lh "$JDK/bin/java"
+          ls -lh "$JDK/bin/javac"
 
 
       # ==========================================
@@ -676,26 +618,20 @@ jobs:
           echo "VERIFYING ARM64"
           echo "=========================================="
 
-
           JAVA_REAL=$(readlink -f "$JDK/bin/java")
-
           JAVAC_REAL=$(readlink -f "$JDK/bin/javac")
-
 
           echo ""
           echo "java:"
           file "$JAVA_REAL"
 
-
           echo ""
           echo "javac:"
           file "$JAVAC_REAL"
 
-
           echo ""
           echo "Expected:"
           echo "ARM aarch64"
-
 
           if ! file "$JAVA_REAL" | grep -Ei \
             "aarch64|ARM aarch64|ARM64"; then
@@ -707,7 +643,6 @@ jobs:
 
           fi
 
-
           if ! file "$JAVAC_REAL" | grep -Ei \
             "aarch64|ARM aarch64|ARM64"; then
 
@@ -717,7 +652,6 @@ jobs:
             exit 1
 
           fi
-
 
           echo ""
           echo "ARM64 verification successful."
@@ -738,24 +672,31 @@ jobs:
           echo "Creating ZIP"
           echo "=========================================="
 
+          rm -f android-jdk17-arm64.zip
 
           cd output
-
 
           zip -r -9 \
             ../android-jdk17-arm64.zip \
             jdk-17
 
-
           cd ..
 
+          if [ ! -f android-jdk17-arm64.zip ]; then
+
+            echo ""
+            echo "ERROR: ZIP was not created."
+
+            exit 1
+
+          fi
 
           echo ""
-          echo "ZIP created:"
+          echo "=========================================="
+          echo "ZIP CREATED"
+          echo "=========================================="
 
-
-          ls -lh \
-            android-jdk17-arm64.zip
+          ls -lh android-jdk17-arm64.zip
 
 
       # ==========================================
@@ -773,17 +714,20 @@ jobs:
           echo "Testing ZIP"
           echo "=========================================="
 
+          if [ ! -f android-jdk17-arm64.zip ]; then
+            echo "ERROR: ZIP file missing."
+            exit 1
+          fi
 
           unzip -t \
             android-jdk17-arm64.zip
-
 
           echo ""
           echo "ZIP test successful."
 
 
       # ==========================================
-      # SHA256
+      # GENERATE SHA256
       # ==========================================
 
       - name: Generate SHA256
@@ -796,17 +740,50 @@ jobs:
             android-jdk17-arm64.zip \
             > android-jdk17-arm64.zip.sha256
 
+          echo ""
+          echo "=========================================="
+          echo "SHA256"
+          echo "=========================================="
+
+          cat android-jdk17-arm64.zip.sha256
+
+
+      # ==========================================
+      # VERIFY FINAL FILES
+      # ==========================================
+
+      - name: Verify final files
+        shell: bash
+        run: |
+
+          set -e
+
+          echo ""
+          echo "=========================================="
+          echo "FINAL FILES"
+          echo "=========================================="
+
+          test -f android-jdk17-arm64.zip
+
+          test -f android-jdk17-arm64.zip.sha256
+
+          echo ""
+          echo "ZIP:"
+          ls -lh android-jdk17-arm64.zip
 
           echo ""
           echo "SHA256:"
-          cat android-jdk17-arm64.zip.sha256
+          ls -lh android-jdk17-arm64.zip.sha256
+
+          echo ""
+          echo "Files ready."
 
 
       # ==========================================
       # UPLOAD ARTIFACT
       # ==========================================
 
-      - name: Upload JDK artifact
+      - name: Upload JDK ZIP artifact
         uses: actions/upload-artifact@v4
         with:
 
@@ -815,6 +792,8 @@ jobs:
           path: |
             android-jdk17-arm64.zip
             android-jdk17-arm64.zip.sha256
+
+          if-no-files-found: error
 
           retention-days: 30
 

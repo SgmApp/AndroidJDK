@@ -45,6 +45,7 @@ jobs:
 
           sudo apt-get install -y \
             git \
+            git-lfs \
             curl \
             wget \
             unzip \
@@ -796,6 +797,134 @@ jobs:
           if-no-files-found: error
 
           retention-days: 30
+
+
+      # ==========================================
+      # UPLOAD ZIP TO REPOSITORY USING GIT LFS
+      # ==========================================
+
+      - name: Upload JDK ZIP to repository
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          TARGET_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+
+          set -e
+
+          echo ""
+          echo "=========================================="
+          echo "Uploading JDK ZIP to repository"
+          echo "=========================================="
+
+          echo ""
+          echo "Target branch:"
+          echo "$TARGET_BRANCH"
+
+          echo ""
+          echo "Checking Git LFS..."
+
+          git lfs version
+
+          git lfs install
+
+          echo ""
+          echo "Configuring Git LFS..."
+
+          git lfs track "android-jdk17-arm64.zip"
+
+          echo ""
+          echo "Git LFS configuration:"
+          cat .gitattributes
+
+          echo ""
+          echo "Fetching default branch..."
+
+          git fetch origin \
+            "$TARGET_BRANCH"
+
+          echo ""
+          echo "Switching to default branch..."
+
+          git checkout -B \
+            "$TARGET_BRANCH" \
+            "origin/$TARGET_BRANCH"
+
+          echo ""
+          echo "Checking generated files..."
+
+          test -f android-jdk17-arm64.zip
+
+          test -f android-jdk17-arm64.zip.sha256
+
+          echo ""
+          echo "ZIP:"
+          ls -lh android-jdk17-arm64.zip
+
+          echo ""
+          echo "SHA256:"
+          ls -lh android-jdk17-arm64.zip.sha256
+
+          echo ""
+          echo "Git status before commit:"
+
+          git status --short
+
+          echo ""
+          echo "Adding files..."
+
+          git add .gitattributes
+
+          git add android-jdk17-arm64.zip
+
+          git add android-jdk17-arm64.zip.sha256
+
+          echo ""
+          echo "Git status after add:"
+
+          git status --short
+
+          if git diff --cached --quiet; then
+
+            echo ""
+            echo "No repository changes detected."
+
+            exit 0
+
+          fi
+
+          echo ""
+          echo "Creating commit..."
+
+          git config user.name \
+            "github-actions[bot]"
+
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git commit \
+            -m "Add Android JDK 17 ARM64"
+
+          echo ""
+          echo "Pushing to repository..."
+
+          git push \
+            origin \
+            "HEAD:$TARGET_BRANCH"
+
+          echo ""
+          echo "=========================================="
+          echo "JDK ZIP UPLOADED TO REPOSITORY"
+          echo "=========================================="
+
+          echo ""
+          echo "Repository branch:"
+          echo "$TARGET_BRANCH"
+
+          echo ""
+          echo "Files:"
+          echo "android-jdk17-arm64.zip"
+          echo "android-jdk17-arm64.zip.sha256"
 
 
       # ==========================================

@@ -344,48 +344,147 @@ jobs:
           echo "Java:"
           java -version
 
+
           # ======================================
-          # FIX TERMUX ARCHITECTURE STATE
+          # FIX TERMUX /data PATH
           # ======================================
 
           echo ""
-          echo "Fixing Termux architecture state..."
+          echo "Configuring Termux filesystem..."
 
-          TERMUX_ARCH_FILE="$RUNNER_TEMP/TERMUX_ARCH"
+          TERMUX_DATA="$RUNNER_TEMP/termux-data"
 
-          echo "aarch64" > "$TERMUX_ARCH_FILE"
+          mkdir -p "$TERMUX_DATA"
+
+          mkdir -p "$TERMUX_DATA/apt"
+
+          mkdir -p "$TERMUX_DATA/usr"
+
+          mkdir -p "$TERMUX_DATA/home"
+
+          mkdir -p "$TERMUX_DATA/tmp"
+
+          mkdir -p "$TERMUX_DATA/var"
+
+          mkdir -p "$TERMUX_DATA/etc"
+
+          mkdir -p "$TERMUX_DATA/share"
+
+
+          # ======================================
+          # PATCH /data REFERENCES
+          # ======================================
 
           echo ""
-          echo "Architecture file:"
-          cat "$TERMUX_ARCH_FILE"
+          echo "Patching Termux build scripts..."
 
-          # The Termux build helper currently expects
-          # /data/TERMUX_ARCH. GitHub Actions does not
-          # provide that Termux-specific path.
-          #
-          # Replace only the hard-coded path used by
-          # termux_step_handle_buildarch.sh.
+          find scripts \
+            -type f \
+            -name "*.sh" \
+            -print0 |
+          while IFS= read -r -d '' file
+          do
 
-          if grep -q '/data/TERMUX_ARCH' \
-            scripts/build/termux_step_handle_buildarch.sh; then
+            if grep -q '/data/' "$file"; then
+
+              echo "Patching:"
+              echo "$file"
+
+              sed -i \
+                "s#/data/#$TERMUX_DATA/#g" \
+                "$file"
+
+            fi
+
+          done
+
+
+          # ======================================
+          # PATCH BUILD PACKAGE
+          # ======================================
+
+          if grep -q '/data/' build-package.sh; then
 
             echo ""
-            echo "Patching termux_step_handle_buildarch.sh..."
+            echo "Patching build-package.sh..."
 
             sed -i \
-              "s#/data/TERMUX_ARCH#$TERMUX_ARCH_FILE#g" \
-              scripts/build/termux_step_handle_buildarch.sh
+              "s#/data/#$TERMUX_DATA/#g" \
+              build-package.sh
 
           fi
 
+
+          # ======================================
+          # PATCH COMMON CONFIGURATION
+          # ======================================
+
+          if [ -d scripts ]; then
+
+            grep -RIl '/data/' scripts \
+              --include='*.sh' \
+              2>/dev/null |
+            while IFS= read -r file
+            do
+
+              echo "Additional patch:"
+              echo "$file"
+
+              sed -i \
+                "s#/data/#$TERMUX_DATA/#g" \
+                "$file"
+
+            done || true
+
+          fi
+
+
+          # ======================================
+          # VERIFY NO /data ACCESS
+          # ======================================
+
           echo ""
-          echo "Architecture handler:"
-          grep -n "TERMUX_ARCH" \
-            scripts/build/termux_step_handle_buildarch.sh \
+          echo "Checking remaining /data references..."
+
+          grep -RIn '/data/' \
+            scripts \
+            build-package.sh \
+            2>/dev/null \
             || true
+
+
+          # ======================================
+          # TERMUX ENVIRONMENT
+          # ======================================
+
+          export TERMUX_DATA="$TERMUX_DATA"
+
+          export PREFIX="$TERMUX_DATA/usr"
+
+          export HOME="$TERMUX_DATA/home"
+
+          export TMPDIR="$TERMUX_DATA/tmp"
+
+          export TERMUX_PREFIX="$TERMUX_DATA/usr"
+
+          export TERMUX_BUILD_TARBALL="$TERMUX_DATA"
+
+
+          echo ""
+          echo "Termux data directory:"
+          echo "$TERMUX_DATA"
+
+          echo ""
+          echo "Prefix:"
+          echo "$PREFIX"
+
+          echo ""
+          echo "Home:"
+          echo "$HOME"
 
           echo ""
           echo "Starting Termux build..."
+
 
           ./build-package.sh \
             -a aarch64 \

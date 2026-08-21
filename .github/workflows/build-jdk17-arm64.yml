@@ -1,0 +1,390 @@
+name: Build Android OpenJDK 17 ARM64
+
+on:
+
+  workflow_dispatch:
+
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+
+  build:
+
+    name: Android OpenJDK 17 - ARM64
+
+    runs-on: ubuntu-22.04
+
+    env:
+      TERMUX_ARCH: aarch64
+
+    steps:
+
+      # ==========================================
+      # CHECKOUT
+      # ==========================================
+
+      - name: Checkout AndroidJDK
+        uses: actions/checkout@v4
+
+
+      # ==========================================
+      # SYSTEM DEPENDENCIES
+      # ==========================================
+
+      - name: Install build dependencies
+        shell: bash
+        run: |
+
+          set -e
+
+          sudo apt-get update
+
+          sudo apt-get install -y \
+            git \
+            curl \
+            wget \
+            unzip \
+            zip \
+            tar \
+            xz-utils \
+            bzip2 \
+            gzip \
+            patch \
+            file \
+            rsync \
+            build-essential \
+            autoconf \
+            automake \
+            cmake \
+            ninja-build \
+            pkg-config \
+            libx11-dev \
+            libxext-dev \
+            libxrender-dev \
+            libxtst-dev \
+            libxt-dev \
+            libxrandr-dev \
+            libcups2-dev \
+            libfontconfig1-dev \
+            libasound2-dev \
+            libfreetype6-dev \
+            libjpeg-dev \
+            libpng-dev \
+            zlib1g-dev \
+            liblcms2-dev \
+            cpio \
+            mercurial
+
+          echo "Dependencies installed."
+
+
+      # ==========================================
+      # CLONE TERMUX PACKAGES
+      # ==========================================
+
+      - name: Clone Termux packages
+        shell: bash
+        run: |
+
+          set -e
+
+          git clone \
+            --depth 1 \
+            https://github.com/termux/termux-packages.git \
+            termux-packages
+
+          cd termux-packages
+
+          echo "Termux packages cloned."
+
+          git rev-parse HEAD
+
+
+      # ==========================================
+      # SHOW OPENJDK RECIPE
+      # ==========================================
+
+      - name: Check OpenJDK 17 recipe
+        shell: bash
+        run: |
+
+          set -e
+
+          test -f \
+            termux-packages/packages/openjdk-17/build.sh
+
+          echo "OpenJDK recipe found."
+
+          sed -n '1,240p' \
+            termux-packages/packages/openjdk-17/build.sh
+
+
+      # ==========================================
+      # BUILD OPENJDK 17
+      # ==========================================
+
+      - name: Build OpenJDK 17 ARM64
+        shell: bash
+        run: |
+
+          set -e
+
+          cd termux-packages
+
+          export TERMUX_ARCH=aarch64
+
+          export TERMUX_FORCE_BUILD=true
+
+          export TERMUX_INSTALL_DEPS=true
+
+          echo "=========================================="
+          echo "Building Android OpenJDK 17"
+          echo "Architecture: aarch64"
+          echo "=========================================="
+
+          ./build-package.sh \
+            -a aarch64 \
+            -f \
+            -I \
+            openjdk-17
+
+
+      # ==========================================
+      # FIND JDK
+      # ==========================================
+
+      - name: Locate generated JDK
+        shell: bash
+        run: |
+
+          set -e
+
+          echo "Searching for OpenJDK output..."
+
+          find termux-packages \
+            -type d \
+            -path "*/lib/jvm/java-17-openjdk" \
+            -print || true
+
+          find termux-packages \
+            -type f \
+            -name "*openjdk*17*" \
+            -print || true
+
+
+      # ==========================================
+      # PREPARE JDK
+      # ==========================================
+
+      - name: Prepare standalone JDK
+        shell: bash
+        run: |
+
+          set -e
+
+          rm -rf output
+
+          mkdir -p output
+
+          JDK_DIR=$(find termux-packages \
+            -type d \
+            -path "*/lib/jvm/java-17-openjdk" \
+            -print -quit)
+
+          if [ -z "$JDK_DIR" ]; then
+
+            echo "ERROR: OpenJDK directory not found."
+
+            exit 1
+
+          fi
+
+          echo "JDK directory:"
+          echo "$JDK_DIR"
+
+          mkdir -p output/jdk-17
+
+          cp -a \
+            "$JDK_DIR"/. \
+            output/jdk-17/
+
+
+      # ==========================================
+      # REMOVE UNNECESSARY FILES
+      # ==========================================
+
+      - name: Clean JDK
+        shell: bash
+        run: |
+
+          set -e
+
+          JDK="output/jdk-17"
+
+          echo "Cleaning JDK..."
+
+          rm -rf \
+            "$JDK/man" \
+            "$JDK/demo" \
+            "$JDK/sample" \
+            "$JDK/include"
+
+          find "$JDK" \
+            -type f \
+            \( \
+              -name "*.debuginfo" \
+              -o -name "*.debug" \
+            \) \
+            -delete
+
+          find "$JDK" \
+            -type d \
+            -name "__pycache__" \
+            -prune \
+            -exec rm -rf {} \;
+
+          echo "JDK cleaned."
+
+
+      # ==========================================
+      # FIX EXECUTABLE PERMISSIONS
+      # ==========================================
+
+      - name: Set executable permissions
+        shell: bash
+        run: |
+
+          set -e
+
+          chmod +x \
+            output/jdk-17/bin/* \
+            || true
+
+          echo "Java:"
+          ls -l output/jdk-17/bin/java
+
+          echo "Javac:"
+          ls -l output/jdk-17/bin/javac
+
+
+      # ==========================================
+      # VERIFY FILES
+      # ==========================================
+
+      - name: Verify JDK files
+        shell: bash
+        run: |
+
+          set -e
+
+          test -f \
+            output/jdk-17/bin/java
+
+          test -f \
+            output/jdk-17/bin/javac
+
+          test -d \
+            output/jdk-17/lib
+
+          echo "=========================================="
+          echo "JDK structure OK"
+          echo "=========================================="
+
+          find output/jdk-17/bin \
+            -maxdepth 1 \
+            -type f \
+            -print
+
+
+      # ==========================================
+      # CREATE ZIP
+      # ==========================================
+
+      - name: Create ARM64 JDK ZIP
+        shell: bash
+        run: |
+
+          set -e
+
+          cd output
+
+          zip -r -9 \
+            ../android-jdk17-arm64.zip \
+            jdk-17
+
+          cd ..
+
+          ls -lh \
+            android-jdk17-arm64.zip
+
+
+      # ==========================================
+      # CHECK ZIP
+      # ==========================================
+
+      - name: Test ZIP
+        shell: bash
+        run: |
+
+          set -e
+
+          unzip -t \
+            android-jdk17-arm64.zip
+
+          echo "ZIP test successful."
+
+
+      # ==========================================
+      # SHA256
+      # ==========================================
+
+      - name: Generate SHA256
+        shell: bash
+        run: |
+
+          set -e
+
+          sha256sum \
+            android-jdk17-arm64.zip \
+            > android-jdk17-arm64.zip.sha256
+
+          cat \
+            android-jdk17-arm64.zip.sha256
+
+
+      # ==========================================
+      # UPLOAD ARTIFACT
+      # ==========================================
+
+      - name: Upload JDK artifact
+        uses: actions/upload-artifact@v4
+        with:
+
+          name: android-jdk17-arm64
+
+          path: |
+            android-jdk17-arm64.zip
+            android-jdk17-arm64.zip.sha256
+
+          retention-days: 30
+
+
+      # ==========================================
+      # CREATE GITHUB RELEASE
+      # ==========================================
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+
+          files: |
+            android-jdk17-arm64.zip
+            android-jdk17-arm64.zip.sha256
+
+          generate_release_notes: true

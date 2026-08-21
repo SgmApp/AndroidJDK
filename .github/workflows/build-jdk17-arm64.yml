@@ -19,32 +19,27 @@ jobs:
     runs-on: ubuntu-22.04
 
     env:
-      DEBIAN_FRONTEND: noninteractive
       TERMUX_ARCH: aarch64
 
     steps:
 
-      # ============================================================
-      # 1. CHECKOUT
-      # ============================================================
+      # ==========================================
+      # CHECKOUT
+      # ==========================================
 
       - name: Checkout AndroidJDK
         uses: actions/checkout@v4
 
 
-      # ============================================================
-      # 2. INSTALL HOST DEPENDENCIES
-      # ============================================================
+      # ==========================================
+      # SYSTEM DEPENDENCIES
+      # ==========================================
 
       - name: Install build dependencies
         shell: bash
         run: |
 
           set -e
-
-          echo "=========================================="
-          echo "INSTALL HOST DEPENDENCIES"
-          echo "=========================================="
 
           sudo apt-get update
 
@@ -83,22 +78,17 @@ jobs:
             liblcms2-dev \
             cpio \
             mercurial \
-            bison \
-            flex \
-            gawk \
-            gettext \
-            ca-certificates \
-            gnupg \
-            lzip \
-            jq
+            ca-certificates
 
           echo ""
-          echo "Host dependencies installed."
+          echo "=========================================="
+          echo "System dependencies installed"
+          echo "=========================================="
 
 
-      # ============================================================
-      # 3. JAVA 17
-      # ============================================================
+      # ==========================================
+      # JAVA 17
+      # ==========================================
 
       - name: Install Java 17
         shell: bash
@@ -106,50 +96,16 @@ jobs:
 
           set -e
 
-          echo "=========================================="
-          echo "INSTALL JAVA 17"
-          echo "=========================================="
-
           sudo apt-get install -y openjdk-17-jdk
 
-          echo ""
-          echo "Installed Java versions:"
-          update-alternatives --list java || true
+          java -version
 
-          echo ""
-          echo "Selecting Java 17..."
-
-          JAVA17="/usr/lib/jvm/java-17-openjdk-amd64"
-
-          if [ ! -d "$JAVA17" ]; then
-            echo "ERROR: Java 17 directory not found:"
-            echo "$JAVA17"
-            exit 1
-          fi
-
-          sudo update-alternatives \
-            --set java \
-            "$JAVA17/bin/java"
-
-          sudo update-alternatives \
-            --set javac \
-            "$JAVA17/bin/javac"
-
-          echo ""
-          echo "JAVA_HOME=$JAVA17" >> "$GITHUB_ENV"
-
-          echo ""
-          echo "Java:"
-          "$JAVA17/bin/java" -version
-
-          echo ""
-          echo "Javac:"
-          "$JAVA17/bin/javac" -version
+          javac -version
 
 
-      # ============================================================
-      # 4. CLONE TERMUX PACKAGES
-      # ============================================================
+      # ==========================================
+      # CLONE TERMUX PACKAGES
+      # ==========================================
 
       - name: Clone Termux packages
         shell: bash
@@ -157,55 +113,24 @@ jobs:
 
           set -e
 
-          echo "=========================================="
-          echo "CLONE TERMUX PACKAGES"
-          echo "=========================================="
-
           git clone \
             --depth 1 \
             https://github.com/termux/termux-packages.git \
             termux-packages
 
+          echo ""
+          echo "=========================================="
+          echo "Termux packages cloned"
+          echo "=========================================="
+
           cd termux-packages
 
-          echo ""
-          echo "Termux commit:"
           git rev-parse HEAD
 
 
-      # ============================================================
-      # 5. SETUP TERMUX UBUNTU ENVIRONMENT
-      # ============================================================
-
-      - name: Setup Termux build environment
-        shell: bash
-        run: |
-
-          set -e
-
-          cd termux-packages
-
-          echo "=========================================="
-          echo "SETUP TERMUX BUILD ENVIRONMENT"
-          echo "=========================================="
-
-          if [ -f scripts/setup-ubuntu.sh ]; then
-
-            chmod +x scripts/setup-ubuntu.sh
-
-            ./scripts/setup-ubuntu.sh
-
-          else
-
-            echo "setup-ubuntu.sh not found."
-            echo "Continuing because GitHub runner already has most tools."
-
-          fi
-
-
-      # ============================================================
-      # 6. SETUP ANDROID SDK + NDK
-      # ============================================================
+      # ==========================================
+      # SETUP ANDROID SDK + NDK
+      # ==========================================
 
       - name: Setup Android SDK and NDK
         shell: bash
@@ -215,8 +140,9 @@ jobs:
 
           cd termux-packages
 
+          echo ""
           echo "=========================================="
-          echo "SETUP ANDROID SDK + NDK"
+          echo "Setting up Android SDK + NDK"
           echo "=========================================="
 
           chmod +x scripts/setup-android-sdk.sh
@@ -224,104 +150,35 @@ jobs:
           ./scripts/setup-android-sdk.sh
 
           echo ""
-          echo "Android SDK/NDK setup finished."
+          echo "=========================================="
+          echo "SDK / NDK setup finished"
+          echo "=========================================="
 
 
-      # ============================================================
-      # 7. DETECT ANDROID SDK
-      # ============================================================
+      # ==========================================
+      # VERIFY ANDROID NDK
+      # ==========================================
 
-      - name: Detect Android SDK
+      - name: Verify Android NDK r29
         shell: bash
         run: |
 
           set -e
 
-          echo "=========================================="
-          echo "DETECT ANDROID SDK"
-          echo "=========================================="
-
-          SDK=""
-
-          if [ -d "$HOME/lib/android-sdk" ]; then
-
-            SDK="$HOME/lib/android-sdk"
-
-          elif [ -d "$HOME/lib/android-sdk-35" ]; then
-
-            SDK="$HOME/lib/android-sdk-35"
-
-          else
-
-            SDK=$(find "$HOME/lib" \
-              -maxdepth 1 \
-              -type d \
-              -name "android-sdk*" \
-              -print -quit \
-              2>/dev/null || true)
-
-          fi
-
-          if [ -z "$SDK" ] || [ ! -d "$SDK" ]; then
-
-            echo ""
-            echo "ERROR: Android SDK not found."
-
-            echo ""
-            echo "HOME/lib:"
-            ls -la "$HOME/lib" || true
-
-            exit 1
-
-          fi
+          NDK_DIR="$HOME/lib/android-ndk-r29"
 
           echo ""
-          echo "SDK:"
-          echo "$SDK"
-
-          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
-
-
-      # ============================================================
-      # 8. DETECT ANDROID NDK
-      # ============================================================
-
-      - name: Detect Android NDK
-        shell: bash
-        run: |
-
-          set -e
-
           echo "=========================================="
-          echo "DETECT ANDROID NDK"
+          echo "Checking Android NDK"
           echo "=========================================="
 
-          NDK_DIR=""
+          echo "Expected NDK:"
+          echo "$NDK_DIR"
 
-          if [ -d "$HOME/lib/android-ndk-r29" ]; then
-
-            NDK_DIR="$HOME/lib/android-ndk-r29"
-
-          else
-
-            NDK_DIR=$(find "$HOME/lib" \
-              -maxdepth 1 \
-              -type d \
-              -name "android-ndk-r*" \
-              -print -quit \
-              2>/dev/null || true)
-
-          fi
-
-          if [ -z "$NDK_DIR" ] || [ ! -d "$NDK_DIR" ]; then
+          if [ ! -d "$NDK_DIR" ]; then
 
             echo ""
-            echo "ERROR: Android NDK not found."
-
-            echo ""
-            echo "Available directories:"
-            ls -la "$HOME/lib" || true
+            echo "ERROR: Android NDK r29 was not installed."
 
             exit 1
 
@@ -337,18 +194,20 @@ jobs:
           fi
 
           echo ""
-          echo "NDK:"
-          echo "$NDK_DIR"
-
-          echo ""
+          echo "NDK source.properties:"
           cat "$NDK_DIR/source.properties"
 
-          echo "NDK=$NDK_DIR" >> "$GITHUB_ENV"
+          echo ""
+          echo "NDK directory:"
+          ls -la "$NDK_DIR"
+
+          echo ""
+          echo "NDK r29 OK."
 
 
-      # ============================================================
-      # 9. CONFIGURE PATH
-      # ============================================================
+      # ==========================================
+      # EXPORT SDK / NDK
+      # ==========================================
 
       - name: Configure Android build environment
         shell: bash
@@ -356,325 +215,46 @@ jobs:
 
           set -e
 
-          SDK="$ANDROID_HOME"
-          NDK_DIR="$NDK"
+          echo "ANDROID_HOME=$HOME/lib/android-sdk-35" >> "$GITHUB_ENV"
 
-          echo "=========================================="
-          echo "CONFIGURE BUILD ENVIRONMENT"
-          echo "=========================================="
+          echo "ANDROID_SDK_ROOT=$HOME/lib/android-sdk-35" >> "$GITHUB_ENV"
+
+          echo "NDK=$HOME/lib/android-ndk-r29" >> "$GITHUB_ENV"
 
           echo "TERMUX_ARCH=aarch64" >> "$GITHUB_ENV"
 
           echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> "$GITHUB_ENV"
 
-          if [ -d "$SDK/cmdline-tools/latest/bin" ]; then
-            echo "$SDK/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
-          fi
+          echo "$HOME/lib/android-sdk-35/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
 
-          if [ -d "$SDK/cmdline-tools/bin" ]; then
-            echo "$SDK/cmdline-tools/bin" >> "$GITHUB_PATH"
-          fi
+          echo "$HOME/lib/android-sdk-35/platform-tools" >> "$GITHUB_PATH"
 
-          if [ -d "$SDK/platform-tools" ]; then
-            echo "$SDK/platform-tools" >> "$GITHUB_PATH"
-          fi
+          echo "$HOME/lib/android-sdk-35/build-tools/35.0.0" >> "$GITHUB_PATH"
 
           echo ""
-          echo "ANDROID_HOME:"
-          echo "$SDK"
-
-          echo ""
-          echo "ANDROID_SDK_ROOT:"
-          echo "$ANDROID_SDK_ROOT"
-
-          echo ""
-          echo "NDK:"
-          echo "$NDK_DIR"
+          echo "=========================================="
+          echo "Environment configured"
+          echo "=========================================="
 
 
-      # ============================================================
-      # 10. VERIFY SDK
-      # ============================================================
+      # ==========================================
+      # VERIFY ENVIRONMENT
+      # ==========================================
 
-      - name: Verify Android SDK
+      - name: Verify build environment
         shell: bash
         run: |
 
           set -e
 
-          echo "=========================================="
-          echo "VERIFY ANDROID SDK"
-          echo "=========================================="
-
-          test -d "$ANDROID_HOME"
-
-          SDKMANAGER=""
-
-          if [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
-
-            SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-
-          elif [ -x "$ANDROID_HOME/cmdline-tools/bin/sdkmanager" ]; then
-
-            SDKMANAGER="$ANDROID_HOME/cmdline-tools/bin/sdkmanager"
-
-          else
-
-            SDKMANAGER=$(find "$ANDROID_HOME" \
-              -type f \
-              -name sdkmanager \
-              -print -quit \
-              2>/dev/null || true)
-
-          fi
-
-          if [ -z "$SDKMANAGER" ] || [ ! -x "$SDKMANAGER" ]; then
-
-            echo ""
-            echo "ERROR: sdkmanager not found."
-
-            find "$ANDROID_HOME" \
-              -type f \
-              -name sdkmanager \
-              -print \
-              || true
-
-            exit 1
-
-          fi
-
           echo ""
-          echo "SDKMANAGER:"
-          echo "$SDKMANAGER"
-
-          "$SDKMANAGER" \
-            --sdk_root="$ANDROID_HOME" \
-            --list_installed \
-            || true
-
-
-      # ============================================================
-      # 11. VERIFY NDK
-      # ============================================================
-
-      - name: Verify Android NDK
-        shell: bash
-        run: |
-
-          set -e
-
           echo "=========================================="
-          echo "VERIFY ANDROID NDK"
+          echo "BUILD ENVIRONMENT"
           echo "=========================================="
-
-          test -d "$NDK"
-          test -f "$NDK/source.properties"
-
-          echo ""
-          echo "NDK:"
-          echo "$NDK"
-
-          echo ""
-          cat "$NDK/source.properties"
-
-          echo ""
-          echo "LLVM:"
-          ls -la \
-            "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin" \
-            | head -50
-
-
-      # ============================================================
-      # 12. CREATE TERMUX ARCH FILE
-      #
-      # IMPORTANT:
-      # Current Termux build system uses /data/TERMUX_ARCH.
-      # GitHub Ubuntu runners do not normally have /data.
-      # ============================================================
-
-      - name: Configure Termux architecture
-        shell: bash
-        run: |
-
-          set -e
-
-          echo "=========================================="
-          echo "CONFIGURE TERMUX ARCHITECTURE"
-          echo "=========================================="
-
-          ARCH="aarch64"
-
-          echo ""
-          echo "Target architecture:"
-          echo "$ARCH"
-
-          # --------------------------------------------------------
-          # Termux build system expects this file.
-          # --------------------------------------------------------
-
-          sudo mkdir -p /data
-
-          echo "$ARCH" | sudo tee /data/TERMUX_ARCH > /dev/null
-
-          sudo chmod 644 /data/TERMUX_ARCH
-
-          echo ""
-          echo "Created:"
-          echo "/data/TERMUX_ARCH"
-
-          echo ""
-          echo "Contents:"
-          cat /data/TERMUX_ARCH
-
-          echo ""
-          echo "Architecture environment:"
-          export TERMUX_ARCH="$ARCH"
-
-          echo "TERMUX_ARCH=$ARCH" >> "$GITHUB_ENV"
-
-
-      # ============================================================
-      # 13. CHECK OPENJDK RECIPE
-      # ============================================================
-
-      - name: Check OpenJDK 17 recipe
-        shell: bash
-        run: |
-
-          set -e
-
-          echo "=========================================="
-          echo "CHECK OPENJDK 17 RECIPE"
-          echo "=========================================="
-
-          RECIPE="termux-packages/packages/openjdk-17/build.sh"
-
-          if [ ! -f "$RECIPE" ]; then
-
-            echo ""
-            echo "ERROR: OpenJDK 17 recipe not found."
-
-            exit 1
-
-          fi
-
-          echo ""
-          echo "Recipe:"
-          echo "$RECIPE"
-
-          echo ""
-          sed -n '1,260p' "$RECIPE"
-
-
-      # ============================================================
-      # 14. VERIFY JAVA 17 BEFORE BUILD
-      # ============================================================
-
-      - name: Verify Java 17
-        shell: bash
-        run: |
-
-          set -e
-
-          echo "=========================================="
-          echo "VERIFY JAVA 17"
-          echo "=========================================="
-
-          export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
-
-          export PATH="$JAVA_HOME/bin:$PATH"
 
           echo ""
           echo "JAVA_HOME:"
           echo "$JAVA_HOME"
-
-          echo ""
-          echo "java:"
-          which java
-
-          java -version
-
-          echo ""
-          echo "javac:"
-          which javac
-
-          javac -version
-
-          echo ""
-          echo "Java 17 verification complete."
-
-
-      # ============================================================
-      # 15. BUILD OPENJDK 17 ARM64
-      # ============================================================
-
-      - name: Build OpenJDK 17 ARM64
-        shell: bash
-        env:
-          TERMUX_ARCH: aarch64
-          TERMUX_FORCE_BUILD: true
-          TERMUX_INSTALL_DEPS: true
-        run: |
-
-          set -e
-          set -o pipefail
-
-          cd termux-packages
-
-          # --------------------------------------------------------
-          # Java
-          # --------------------------------------------------------
-
-          export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
-          export PATH="$JAVA_HOME/bin:$PATH"
-
-          # --------------------------------------------------------
-          # Android SDK
-          # --------------------------------------------------------
-
-          export ANDROID_HOME="$ANDROID_HOME"
-          export ANDROID_SDK_ROOT="$ANDROID_HOME"
-
-          # --------------------------------------------------------
-          # Android NDK
-          # --------------------------------------------------------
-
-          export NDK="$NDK"
-
-          # --------------------------------------------------------
-          # Architecture
-          # --------------------------------------------------------
-
-          export TERMUX_ARCH="aarch64"
-
-          # --------------------------------------------------------
-          # Critical fix for GitHub Ubuntu runner
-          # --------------------------------------------------------
-
-          if [ ! -f /data/TERMUX_ARCH ]; then
-
-            echo "Creating /data/TERMUX_ARCH..."
-
-            sudo mkdir -p /data
-
-            echo "aarch64" | sudo tee /data/TERMUX_ARCH > /dev/null
-
-            sudo chmod 644 /data/TERMUX_ARCH
-
-          fi
-
-          echo ""
-          echo "=========================================="
-          echo "BUILD ANDROID OPENJDK 17 ARM64"
-          echo "=========================================="
-
-          echo ""
-          echo "TERMUX_ARCH:"
-          echo "$TERMUX_ARCH"
-
-          echo ""
-          echo "/data/TERMUX_ARCH:"
-          cat /data/TERMUX_ARCH
 
           echo ""
           echo "ANDROID_HOME:"
@@ -685,10 +265,6 @@ jobs:
           echo "$NDK"
 
           echo ""
-          echo "JAVA_HOME:"
-          echo "$JAVA_HOME"
-
-          echo ""
           echo "Java:"
           java -version
 
@@ -697,7 +273,79 @@ jobs:
           javac -version
 
           echo ""
-          echo "Starting build..."
+          echo "NDK:"
+          test -d "$NDK"
+
+          echo "NDK exists."
+
+
+      # ==========================================
+      # CHECK OPENJDK 17 RECIPE
+      # ==========================================
+
+      - name: Check OpenJDK 17 recipe
+        shell: bash
+        run: |
+
+          set -e
+
+          test -f \
+            termux-packages/packages/openjdk-17/build.sh
+
+          echo ""
+          echo "=========================================="
+          echo "OpenJDK 17 recipe found"
+          echo "=========================================="
+
+          sed -n '1,260p' \
+            termux-packages/packages/openjdk-17/build.sh
+
+
+      # ==========================================
+      # BUILD OPENJDK 17 ARM64
+      # ==========================================
+
+      - name: Build OpenJDK 17 ARM64
+        shell: bash
+        run: |
+
+          set -e
+
+          cd termux-packages
+
+          export TERMUX_ARCH=aarch64
+
+          export TERMUX_FORCE_BUILD=true
+
+          export TERMUX_INSTALL_DEPS=true
+
+          export ANDROID_HOME="$HOME/lib/android-sdk-35"
+
+          export ANDROID_SDK_ROOT="$HOME/lib/android-sdk-35"
+
+          export NDK="$HOME/lib/android-ndk-r29"
+
+          export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
+
+          echo ""
+          echo "=========================================="
+          echo "Android OpenJDK 17 ARM64"
+          echo "=========================================="
+
+          echo ""
+          echo "Architecture:"
+          echo "aarch64"
+
+          echo ""
+          echo "NDK:"
+          echo "$NDK"
+
+          echo ""
+          echo "Java:"
+          java -version
+
+          echo ""
+          echo "Starting Termux build..."
 
           ./build-package.sh \
             -a aarch64 \
@@ -706,59 +354,46 @@ jobs:
             openjdk-17
 
 
-      # ============================================================
-      # 16. SHOW TERMUX OUTPUT
-      # ============================================================
+      # ==========================================
+      # FIND GENERATED PACKAGE
+      # ==========================================
 
-      - name: Show Termux build output
-        if: always()
+      - name: Locate OpenJDK package
         shell: bash
         run: |
 
-          echo "=========================================="
-          echo "TERMUX BUILD OUTPUT"
-          echo "=========================================="
-
-          if [ -d termux-packages/output ]; then
-
-            echo ""
-            echo "termux-packages/output:"
-            find termux-packages/output \
-              -maxdepth 3 \
-              -type f \
-              -print \
-              || true
-
-          fi
-
-          if [ -d termux-packages/debs ]; then
-
-            echo ""
-            echo "termux-packages/debs:"
-            find termux-packages/debs \
-              -type f \
-              -print \
-              || true
-
-          fi
+          set -e
 
           echo ""
-          echo "Searching OpenJDK packages:"
+          echo "=========================================="
+          echo "Searching for OpenJDK packages"
+          echo "=========================================="
 
           find termux-packages \
             -type f \
             \( \
               -name "*openjdk*17*.deb" \
               -o \
-              -name "*openjdk*.deb" \
+              -name "*openjdk*17*.tar*" \
             \) \
-            -print \
-            || true
+            -print || true
+
+          echo ""
+          echo "Searching JDK directories..."
+
+          find termux-packages \
+            -type d \
+            \( \
+              -path "*/lib/jvm/java-17-openjdk" \
+              -o \
+              -path "*/lib/jvm/java-17-openjdk*" \
+            \) \
+            -print || true
 
 
-      # ============================================================
-      # 17. EXTRACT GENERATED DEB
-      # ============================================================
+      # ==========================================
+      # PREPARE OUTPUT
+      # ==========================================
 
       - name: Prepare standalone JDK
         shell: bash
@@ -766,108 +401,68 @@ jobs:
 
           set -e
 
+          echo ""
           echo "=========================================="
-          echo "PREPARE STANDALONE JDK"
+          echo "Preparing standalone JDK"
           echo "=========================================="
 
           rm -rf output
-          rm -rf extracted-jdk
 
           mkdir -p output
-          mkdir -p extracted-jdk
 
-          # --------------------------------------------------------
-          # Search generated OpenJDK DEB
-          # --------------------------------------------------------
 
-          DEB=""
+          # ======================================
+          # SEARCH INSTALL PREFIX
+          # ======================================
 
-          DEB=$(find termux-packages \
-            -type f \
-            -name "*openjdk*17*.deb" \
-            -print -quit \
-            2>/dev/null || true)
+          JDK_DIR=$(find termux-packages \
+            -type d \
+            \( \
+              -path "*/lib/jvm/java-17-openjdk" \
+              -o \
+              -path "*/lib/jvm/java-17-openjdk*" \
+            \) \
+            -print -quit)
 
-          if [ -z "$DEB" ]; then
 
-            DEB=$(find termux-packages \
-              -type f \
-              -name "openjdk-17*.deb" \
-              -print -quit \
-              2>/dev/null || true)
+          # ======================================
+          # IF NOT FOUND
+          # ======================================
 
-          fi
-
-          if [ -z "$DEB" ]; then
+          if [ -z "$JDK_DIR" ]; then
 
             echo ""
-            echo "ERROR: OpenJDK 17 DEB was not generated."
+            echo "ERROR: OpenJDK directory not found."
 
             echo ""
-            echo "Available DEB files:"
+            echo "Searching all java directories:"
+
+            find termux-packages \
+              -type d \
+              -name "*java*" \
+              -print || true
+
+            echo ""
+            echo "Searching package output:"
 
             find termux-packages \
               -type f \
               -name "*.deb" \
-              -print \
-              || true
+              -print || true
 
             exit 1
 
           fi
 
-          echo ""
-          echo "OpenJDK DEB:"
-          echo "$DEB"
-
-          # --------------------------------------------------------
-          # Extract DEB
-          # --------------------------------------------------------
-
-          dpkg-deb \
-            -x "$DEB" \
-            extracted-jdk
 
           echo ""
-          echo "Extracted package."
-
-          echo ""
-          echo "Searching JDK..."
-
-          JDK_DIR=$(find extracted-jdk \
-            -type d \
-            -path "*/lib/jvm/java-17-openjdk" \
-            -print -quit \
-            2>/dev/null || true)
-
-          if [ -z "$JDK_DIR" ]; then
-
-            JDK_DIR=$(find extracted-jdk \
-              -type d \
-              -path "*/lib/jvm/java-17-openjdk*" \
-              -print -quit \
-              2>/dev/null || true)
-
-          fi
-
-          if [ -z "$JDK_DIR" ]; then
-
-            echo ""
-            echo "ERROR: JDK directory not found inside DEB."
-
-            find extracted-jdk \
-              -maxdepth 8 \
-              -type d \
-              -print \
-              | head -200
-
-            exit 1
-
-          fi
-
-          echo ""
-          echo "JDK found:"
+          echo "JDK directory:"
           echo "$JDK_DIR"
+
+
+          # ======================================
+          # COPY
+          # ======================================
 
           mkdir -p output/jdk-17
 
@@ -875,13 +470,14 @@ jobs:
             "$JDK_DIR"/. \
             output/jdk-17/
 
+
           echo ""
-          echo "Standalone JDK prepared."
+          echo "JDK copied."
 
 
-      # ============================================================
-      # 18. CHECK JDK STRUCTURE
-      # ============================================================
+      # ==========================================
+      # CHECK JDK STRUCTURE
+      # ==========================================
 
       - name: Check JDK structure
         shell: bash
@@ -891,14 +487,37 @@ jobs:
 
           JDK="output/jdk-17"
 
+          echo ""
           echo "=========================================="
-          echo "CHECK JDK STRUCTURE"
+          echo "JDK STRUCTURE"
           echo "=========================================="
 
-          test -d "$JDK"
-          test -f "$JDK/bin/java"
-          test -f "$JDK/bin/javac"
-          test -d "$JDK/lib"
+          find "$JDK" \
+            -maxdepth 2 \
+            -type d \
+            -print | head -100
+
+          echo ""
+          echo "Checking Java..."
+
+          if [ ! -f "$JDK/bin/java" ]; then
+
+            echo "ERROR: bin/java missing."
+
+            exit 1
+
+          fi
+
+          echo ""
+          echo "Checking Javac..."
+
+          if [ ! -f "$JDK/bin/javac" ]; then
+
+            echo "ERROR: bin/javac missing."
+
+            exit 1
+
+          fi
 
           echo ""
           echo "Java:"
@@ -908,119 +527,10 @@ jobs:
           echo "Javac:"
           ls -lh "$JDK/bin/javac"
 
-          echo ""
-          echo "JDK structure OK."
 
-
-      # ============================================================
-      # 19. FIX EXECUTABLE PERMISSIONS
-      # ============================================================
-
-      - name: Fix executable permissions
-        shell: bash
-        run: |
-
-          set -e
-
-          JDK="output/jdk-17"
-
-          echo "=========================================="
-          echo "FIX EXECUTABLE PERMISSIONS"
-          echo "=========================================="
-
-          find "$JDK/bin" \
-            -type f \
-            -exec chmod +x {} \;
-
-          find "$JDK/lib" \
-            -type f \
-            -exec chmod +x {} \; \
-            2>/dev/null || true
-
-          echo ""
-          ls -lh "$JDK/bin/java"
-          ls -lh "$JDK/bin/javac"
-
-
-      # ============================================================
-      # 20. VERIFY ARM64
-      # ============================================================
-
-      - name: Verify ARM64 binaries
-        shell: bash
-        run: |
-
-          set -e
-
-          JDK="output/jdk-17"
-
-          echo "=========================================="
-          echo "VERIFY ARM64 BINARIES"
-          echo "=========================================="
-
-          echo ""
-          echo "java:"
-          file "$JDK/bin/java"
-
-          echo ""
-          echo "javac:"
-          file "$JDK/bin/javac"
-
-          echo ""
-          echo "Checking ARM64..."
-
-          JAVA_FILE=$(file "$JDK/bin/java")
-
-          if echo "$JAVA_FILE" | grep -Eiq \
-            "aarch64|ARM aarch64|ARM64"; then
-
-            echo ""
-            echo "ARM64 Java binary detected."
-
-          else
-
-            echo ""
-            echo "ERROR: Java binary is not ARM64."
-
-            echo "$JAVA_FILE"
-
-            exit 1
-
-          fi
-
-
-      # ============================================================
-      # 21. CREATE METADATA
-      # ============================================================
-
-      - name: Create JDK metadata
-        shell: bash
-        run: |
-
-          set -e
-
-          JDK="output/jdk-17"
-
-          cat > "$JDK/ANDROIDJDK_INFO.txt" <<EOF
-AndroidJDK
-
-Distribution: SgmApp AndroidJDK
-Java: OpenJDK 17
-Architecture: ARM64 / AArch64
-Platform: Android / Termux
-Build: GitHub Actions
-
-Repository:
-https://github.com/SgmApp/AndroidJDK
-EOF
-
-          echo ""
-          cat "$JDK/ANDROIDJDK_INFO.txt"
-
-
-      # ============================================================
-      # 22. CLEAN JDK
-      # ============================================================
+      # ==========================================
+      # CLEAN JDK
+      # ==========================================
 
       - name: Clean JDK
         shell: bash
@@ -1030,26 +540,27 @@ EOF
 
           JDK="output/jdk-17"
 
+          echo ""
           echo "=========================================="
-          echo "CLEAN JDK"
+          echo "Cleaning JDK"
           echo "=========================================="
+
 
           rm -rf \
             "$JDK/man" \
             "$JDK/demo" \
             "$JDK/sample" \
-            "$JDK/include" \
-            "$JDK/share/doc" \
-            "$JDK/share/man"
+            "$JDK/include"
+
 
           find "$JDK" \
             -type f \
             \( \
               -name "*.debuginfo" \
-              -o \
-              -name "*.debug" \
+              -o -name "*.debug" \
             \) \
             -delete
+
 
           find "$JDK" \
             -type d \
@@ -1057,13 +568,90 @@ EOF
             -prune \
             -exec rm -rf {} \;
 
-          echo ""
+
           echo "JDK cleaned."
 
 
-      # ============================================================
-      # 23. CREATE ZIP
-      # ============================================================
+      # ==========================================
+      # FIX PERMISSIONS
+      # ==========================================
+
+      - name: Fix executable permissions
+        shell: bash
+        run: |
+
+          set -e
+
+          JDK="output/jdk-17"
+
+          chmod +x \
+            "$JDK/bin/"* \
+            || true
+
+
+          echo ""
+          echo "Executable permissions:"
+
+
+          ls -lh \
+            "$JDK/bin/java"
+
+
+          ls -lh \
+            "$JDK/bin/javac"
+
+
+      # ==========================================
+      # VERIFY ARM64
+      # ==========================================
+
+      - name: Verify ARM64 binaries
+        shell: bash
+        run: |
+
+          set -e
+
+          JDK="output/jdk-17"
+
+          echo ""
+          echo "=========================================="
+          echo "VERIFYING ARM64"
+          echo "=========================================="
+
+
+          echo ""
+          echo "java:"
+          file "$JDK/bin/java"
+
+
+          echo ""
+          echo "javac:"
+          file "$JDK/bin/javac"
+
+
+          echo ""
+          echo "Expected:"
+          echo "ARM aarch64"
+
+
+          if ! file "$JDK/bin/java" | grep -Ei \
+            "aarch64|ARM aarch64|ARM64"; then
+
+            echo ""
+            echo "ERROR: java binary is not ARM64."
+
+            exit 1
+
+          fi
+
+
+          echo ""
+          echo "ARM64 verification successful."
+
+
+      # ==========================================
+      # CREATE ZIP
+      # ==========================================
 
       - name: Create ARM64 JDK ZIP
         shell: bash
@@ -1071,28 +659,34 @@ EOF
 
           set -e
 
+          echo ""
           echo "=========================================="
-          echo "CREATE ARM64 JDK ZIP"
+          echo "Creating ZIP"
           echo "=========================================="
 
-          rm -f android-jdk17-arm64.zip
 
           cd output
+
 
           zip -r -9 \
             ../android-jdk17-arm64.zip \
             jdk-17
 
+
           cd ..
 
+
           echo ""
-          echo "ZIP:"
-          ls -lh android-jdk17-arm64.zip
+          echo "ZIP created:"
 
 
-      # ============================================================
-      # 24. TEST ZIP
-      # ============================================================
+          ls -lh \
+            android-jdk17-arm64.zip
+
+
+      # ==========================================
+      # TEST ZIP
+      # ==========================================
 
       - name: Test ZIP
         shell: bash
@@ -1100,20 +694,23 @@ EOF
 
           set -e
 
+          echo ""
           echo "=========================================="
-          echo "TEST ZIP"
+          echo "Testing ZIP"
           echo "=========================================="
+
 
           unzip -t \
             android-jdk17-arm64.zip
+
 
           echo ""
           echo "ZIP test successful."
 
 
-      # ============================================================
-      # 25. SHA256
-      # ============================================================
+      # ==========================================
+      # SHA256
+      # ==========================================
 
       - name: Generate SHA256
         shell: bash
@@ -1125,35 +722,41 @@ EOF
             android-jdk17-arm64.zip \
             > android-jdk17-arm64.zip.sha256
 
+
           echo ""
           echo "SHA256:"
           cat android-jdk17-arm64.zip.sha256
 
 
-      # ============================================================
-      # 26. UPLOAD ARTIFACT
-      # ============================================================
+      # ==========================================
+      # UPLOAD ARTIFACT
+      # ==========================================
 
       - name: Upload JDK artifact
         uses: actions/upload-artifact@v4
         with:
+
           name: android-jdk17-arm64
+
           path: |
             android-jdk17-arm64.zip
             android-jdk17-arm64.zip.sha256
-          if-no-files-found: error
+
           retention-days: 30
 
 
-      # ============================================================
-      # 27. CREATE GITHUB RELEASE
-      # ============================================================
+      # ==========================================
+      # CREATE GITHUB RELEASE
+      # ==========================================
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+
           files: |
             android-jdk17-arm64.zip
             android-jdk17-arm64.zip.sha256
+
           generate_release_notes: true
+

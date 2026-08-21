@@ -78,8 +78,7 @@ jobs:
             liblcms2-dev \
             cpio \
             mercurial \
-            ca-certificates \
-            docker.io
+            ca-certificates
 
           echo ""
           echo "=========================================="
@@ -100,6 +99,14 @@ jobs:
           sudo apt-get install -y openjdk-17-jdk
 
           sudo update-alternatives \
+            --install /usr/bin/java java \
+            /usr/lib/jvm/java-17-openjdk-amd64/bin/java 1711
+
+          sudo update-alternatives \
+            --install /usr/bin/javac javac \
+            /usr/lib/jvm/java-17-openjdk-amd64/bin/javac 1711
+
+          sudo update-alternatives \
             --set java \
             /usr/lib/jvm/java-17-openjdk-amd64/bin/java
 
@@ -107,9 +114,16 @@ jobs:
             --set javac \
             /usr/lib/jvm/java-17-openjdk-amd64/bin/javac
 
-          export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
+          echo "JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64" >> "$GITHUB_ENV"
 
-          echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+          echo ""
+          echo "=========================================="
+          echo "Java 17"
+          echo "=========================================="
+
+          echo ""
+          echo "JAVA_HOME:"
+          echo "/usr/lib/jvm/java-17-openjdk-amd64"
 
           echo ""
           echo "Java:"
@@ -121,25 +135,26 @@ jobs:
 
 
       # ==========================================
-      # START DOCKER
+      # VERIFY DOCKER
       # ==========================================
 
-      - name: Start Docker
+      - name: Verify Docker
         shell: bash
         run: |
 
           set -e
 
-          sudo systemctl start docker
-
-          sudo systemctl enable docker
+          echo ""
+          echo "=========================================="
+          echo "Checking Docker"
+          echo "=========================================="
 
           docker --version
 
+          docker info
+
           echo ""
-          echo "=========================================="
-          echo "Docker started"
-          echo "=========================================="
+          echo "Docker is ready."
 
 
       # ==========================================
@@ -235,10 +250,6 @@ jobs:
           echo ""
           echo "NDK source.properties:"
           cat "$NDK_DIR/source.properties"
-
-          echo ""
-          echo "NDK directory:"
-          ls -la "$NDK_DIR"
 
           echo ""
           echo "NDK r29 OK."
@@ -358,14 +369,6 @@ jobs:
 
           export TERMUX_INSTALL_DEPS=true
 
-          export ANDROID_HOME="$HOME/lib/android-sdk-35"
-
-          export ANDROID_SDK_ROOT="$HOME/lib/android-sdk-35"
-
-          export NDK="$HOME/lib/android-ndk-r29"
-
-          export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
-
           echo ""
           echo "=========================================="
           echo "Android OpenJDK 17 ARM64"
@@ -376,11 +379,7 @@ jobs:
           echo "$TERMUX_ARCH"
 
           echo ""
-          echo "NDK:"
-          echo "$NDK"
-
-          echo ""
-          echo "Java:"
+          echo "Host Java:"
           java -version
 
           echo ""
@@ -395,9 +394,14 @@ jobs:
             -I \
             openjdk-17
 
+          echo ""
+          echo "=========================================="
+          echo "Termux build completed"
+          echo "=========================================="
+
 
       # ==========================================
-      # FIND GENERATED PACKAGE
+      # LOCATE GENERATED PACKAGE
       # ==========================================
 
       - name: Locate OpenJDK package
@@ -411,7 +415,7 @@ jobs:
           echo "Searching for OpenJDK packages"
           echo "=========================================="
 
-          find termux-packages \
+          find termux-packages/output \
             -type f \
             \( \
               -name "*openjdk*17*.deb" \
@@ -421,20 +425,38 @@ jobs:
             -print || true
 
           echo ""
-          echo "Searching JDK directories..."
 
-          find termux-packages \
-            -type d \
-            \( \
-              -path "*/lib/jvm/java-17-openjdk" \
-              -o \
-              -path "*/lib/jvm/java-17-openjdk*" \
-            \) \
-            -print || true
+          PACKAGE=$(find termux-packages/output \
+            -type f \
+            -name "*openjdk*17*.deb" \
+            -print -quit)
+
+          if [ -z "$PACKAGE" ]; then
+
+            echo ""
+            echo "ERROR: OpenJDK 17 package was not generated."
+
+            echo ""
+            echo "Output directory:"
+
+            find termux-packages/output \
+              -maxdepth 3 \
+              -type f \
+              -print || true
+
+            exit 1
+
+          fi
+
+          echo ""
+          echo "OpenJDK package:"
+          echo "$PACKAGE"
+
+          echo "$PACKAGE" > "$GITHUB_WORKSPACE/openjdk_package_path.txt"
 
 
       # ==========================================
-      # PREPARE OUTPUT
+      # PREPARE STANDALONE JDK
       # ==========================================
 
       - name: Prepare standalone JDK
@@ -450,68 +472,61 @@ jobs:
 
           rm -rf output
 
-          mkdir -p output
+          mkdir -p output/jdk-17
 
+          PACKAGE=$(cat openjdk_package_path.txt)
 
-          # ======================================
-          # SEARCH INSTALL PREFIX
-          # ======================================
+          echo ""
+          echo "Package:"
+          echo "$PACKAGE"
 
-          JDK_DIR=$(find termux-packages \
-            -type d \
-            \( \
-              -path "*/lib/jvm/java-17-openjdk" \
-              -o \
-              -path "*/lib/jvm/java-17-openjdk*" \
-            \) \
+          rm -rf extracted-jdk
+
+          mkdir -p extracted-jdk
+
+          echo ""
+          echo "Extracting .deb..."
+
+          dpkg-deb -x \
+            "$PACKAGE" \
+            extracted-jdk
+
+          echo ""
+          echo "Searching extracted JDK..."
+
+          JDK_BIN=$(find extracted-jdk \
+            -type f \
+            -path "*/bin/java" \
             -print -quit)
 
-
-          # ======================================
-          # IF NOT FOUND
-          # ======================================
-
-          if [ -z "$JDK_DIR" ]; then
+          if [ -z "$JDK_BIN" ]; then
 
             echo ""
-            echo "ERROR: OpenJDK directory not found."
+            echo "ERROR: bin/java not found inside OpenJDK package."
 
             echo ""
-            echo "Searching all java directories:"
+            echo "Extracted files:"
 
-            find termux-packages \
-              -type d \
-              -name "*java*" \
-              -print || true
-
-            echo ""
-            echo "Searching package output:"
-
-            find termux-packages \
+            find extracted-jdk \
+              -maxdepth 7 \
               -type f \
-              -name "*.deb" \
-              -print || true
+              | head -300 || true
 
             exit 1
 
           fi
 
+          JDK_DIR=$(dirname "$JDK_BIN")
+
+          JDK_DIR=$(dirname "$JDK_DIR")
 
           echo ""
-          echo "JDK directory:"
+          echo "Detected JDK:"
           echo "$JDK_DIR"
-
-
-          # ======================================
-          # COPY
-          # ======================================
-
-          mkdir -p output/jdk-17
 
           cp -a \
             "$JDK_DIR"/. \
             output/jdk-17/
-
 
           echo ""
           echo "JDK copied."
@@ -535,15 +550,16 @@ jobs:
           echo "=========================================="
 
           find "$JDK" \
-            -maxdepth 2 \
+            -maxdepth 3 \
             -type d \
-            -print | head -100
+            -print | head -150
 
           echo ""
           echo "Checking Java..."
 
           if [ ! -f "$JDK/bin/java" ]; then
 
+            echo ""
             echo "ERROR: bin/java missing."
 
             exit 1
@@ -555,6 +571,7 @@ jobs:
 
           if [ ! -f "$JDK/bin/javac" ]; then
 
+            echo ""
             echo "ERROR: bin/javac missing."
 
             exit 1
@@ -612,6 +629,7 @@ jobs:
             -exec rm -rf {} \;
 
 
+          echo ""
           echo "JDK cleaned."
 
 
@@ -627,18 +645,15 @@ jobs:
 
           JDK="output/jdk-17"
 
-          chmod +x \
-            "$JDK/bin/"* \
-            || true
-
+          find "$JDK/bin" \
+            -type f \
+            -exec chmod +x {} \;
 
           echo ""
-          echo "Executable permissions:"
-
+          echo "Executable permissions fixed."
 
           ls -lh \
             "$JDK/bin/java"
-
 
           ls -lh \
             "$JDK/bin/javac"
@@ -662,14 +677,19 @@ jobs:
           echo "=========================================="
 
 
+          JAVA_REAL=$(readlink -f "$JDK/bin/java")
+
+          JAVAC_REAL=$(readlink -f "$JDK/bin/javac")
+
+
           echo ""
           echo "java:"
-          file "$JDK/bin/java"
+          file "$JAVA_REAL"
 
 
           echo ""
           echo "javac:"
-          file "$JDK/bin/javac"
+          file "$JAVAC_REAL"
 
 
           echo ""
@@ -677,11 +697,22 @@ jobs:
           echo "ARM aarch64"
 
 
-          if ! file "$JDK/bin/java" | grep -Ei \
+          if ! file "$JAVA_REAL" | grep -Ei \
             "aarch64|ARM aarch64|ARM64"; then
 
             echo ""
             echo "ERROR: java binary is not ARM64."
+
+            exit 1
+
+          fi
+
+
+          if ! file "$JAVAC_REAL" | grep -Ei \
+            "aarch64|ARM aarch64|ARM64"; then
+
+            echo ""
+            echo "ERROR: javac binary is not ARM64."
 
             exit 1
 

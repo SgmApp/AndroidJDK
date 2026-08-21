@@ -9,9 +9,7 @@ permissions:
 jobs:
 
   build-sdk:
-
     name: Build Android SDK ZIP
-
     runs-on: ubuntu-latest
 
     steps:
@@ -25,7 +23,7 @@ jobs:
 
 
       # ============================================
-      # JAVA 17
+      # JAVA
       # ============================================
 
       - name: Setup Java 17
@@ -53,10 +51,10 @@ jobs:
 
 
       # ============================================
-      # INSTALL SDK
+      # INSTALL SDK COMPONENTS
       # ============================================
 
-      - name: Install SDK components
+      - name: Install Android SDK components
         run: |
           sdkmanager \
             "platform-tools" \
@@ -65,128 +63,83 @@ jobs:
 
 
       # ============================================
-      # PREPARE SDK
+      # CREATE PACKAGE DIRECTORY
       # ============================================
 
-      - name: Prepare Android SDK
+      - name: Prepare SDK package
         run: |
-
-          set -e
 
           rm -rf android-sdk
 
           mkdir -p android-sdk
 
-          echo "Copying platform-tools..."
-
-          cp -R \
-            "$ANDROID_HOME/platform-tools" \
-            android-sdk/platform-tools
-
-
-          echo "Copying build-tools..."
+          cp -R "$ANDROID_HOME/platform-tools" \
+            android-sdk/
 
           mkdir -p android-sdk/build-tools
 
-          cp -R \
-            "$ANDROID_HOME/build-tools/35.0.0" \
-            android-sdk/build-tools/35.0.0
-
-
-          echo "Copying platform..."
+          cp -R "$ANDROID_HOME/build-tools/35.0.0" \
+            android-sdk/build-tools/
 
           mkdir -p android-sdk/platforms
 
-          cp -R \
-            "$ANDROID_HOME/platforms/android-35" \
-            android-sdk/platforms/android-35
+          cp -R "$ANDROID_HOME/platforms/android-35" \
+            android-sdk/platforms/
 
 
       # ============================================
-      # VERIFY SDK
+      # CHECK STRUCTURE
       # ============================================
 
-      - name: Verify SDK
+      - name: Check SDK structure
         run: |
 
-          set -e
-
           echo "================================"
-          echo "ANDROID SDK"
+          echo "SDK STRUCTURE"
           echo "================================"
 
-          echo ""
-          echo "Platform Tools:"
-          ls -la android-sdk/platform-tools | head
-
+          find android-sdk -maxdepth 3 -type d | sort
 
           echo ""
-          echo "Build Tools:"
-          ls -la android-sdk/build-tools/35.0.0 | head
-
-
-          echo ""
-          echo "Platform:"
-          ls -la android-sdk/platforms/android-35 | head
-
-
-          echo ""
-          echo "Checking android.jar..."
+          echo "Required files:"
 
           test -f \
             android-sdk/platforms/android-35/android.jar
 
+          test -d \
+            android-sdk/build-tools/35.0.0
 
-          echo "android.jar OK"
-
-
-          echo ""
-          echo "Checking aapt2..."
-
-          test -f \
-            android-sdk/build-tools/35.0.0/aapt2
-
-
-          echo "aapt2 OK"
-
+          test -d \
+            android-sdk/platform-tools
 
           echo ""
-          echo "SDK verification successful."
+          echo "SDK structure OK."
 
 
       # ============================================
       # CREATE ZIP
       # ============================================
 
-      - name: Create SDK ZIP
+      - name: Create android-sdk.zip
         run: |
-
-          set -e
 
           cd android-sdk
 
-          zip -r \
-            ../android-sdk.zip \
-            .
+          zip -r ../android-sdk.zip .
 
           cd ..
 
           echo ""
-          echo "================================"
-          echo "ZIP CREATED"
-          echo "================================"
-
+          echo "ZIP created:"
           ls -lh android-sdk.zip
 
 
       # ============================================
-      # VERIFY ZIP
+      # CHECK ZIP
       # ============================================
 
       - name: Verify ZIP
         run: |
-
-          set -e
 
           echo "================================"
           echo "ZIP CONTENT"
@@ -194,96 +147,37 @@ jobs:
 
           unzip -l android-sdk.zip | head -100
 
-
           echo ""
-          echo "Checking required files..."
-
-          unzip -l android-sdk.zip |
-            grep "platforms/android-35/android.jar"
-
-
-          unzip -l android-sdk.zip |
-            grep "build-tools/35.0.0/aapt2"
-
-
-          echo ""
-          echo "ZIP verification successful."
+          echo "ZIP size:"
+          du -h android-sdk.zip
 
 
       # ============================================
-      # UPLOAD TO GITHUB RELEASE
+      # CREATE RELEASE
       # ============================================
 
-      - name: Upload SDK to GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
 
-        run: |
+        with:
 
-          set -e
+          tag_name: v1.0.0
 
-          echo "================================"
-          echo "GITHUB RELEASE"
-          echo "================================"
+          name: Android SDK 35
 
+          body: |
+            Android SDK package for AndroidAIDE.
 
-          # ------------------------------------------
-          # Check whether release exists
-          # ------------------------------------------
+            SDK Platform:
+            android-35
 
-          if gh release view v1.0.0 >/dev/null 2>&1
-          then
+            Build Tools:
+            35.0.0
 
-            echo "Release v1.0.0 already exists."
+            Platform Tools:
+            Included
 
-            echo "Uploading android-sdk.zip..."
+          files: |
+            android-sdk.zip
 
-            gh release upload \
-              v1.0.0 \
-              android-sdk.zip \
-              --clobber
-
-          else
-
-            echo "Release v1.0.0 does not exist."
-
-            echo "Creating release..."
-
-            gh release create \
-              v1.0.0 \
-              android-sdk.zip \
-              --title "Android SDK 35" \
-              --notes "Android SDK package for AndroidAIDE local builds.
-
-SDK Platform:
-android-35
-
-Build Tools:
-35.0.0
-
-Platform Tools:
-Included"
-
-          fi
-
-
-      # ============================================
-      # FINAL
-      # ============================================
-
-      - name: Show download URL
-        env:
-          GH_TOKEN: ${{ github.token }}
-
-        run: |
-
-          echo ""
-          echo "================================"
-          echo "RELEASE COMPLETE"
-          echo "================================"
-
-          gh release view v1.0.0
-
-          echo ""
-          echo "Download URL:"
-          echo "https://github.com/${{ github.repository }}/releases/download/v1.0.0/android-sdk.zip"
+          make_latest: true

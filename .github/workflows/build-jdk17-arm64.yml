@@ -334,7 +334,7 @@ jobs:
 
           echo ""
           echo "Architecture:"
-          echo "aarch64"
+          echo "$TERMUX_ARCH"
 
           echo ""
           echo "NDK:"
@@ -343,6 +343,46 @@ jobs:
           echo ""
           echo "Java:"
           java -version
+
+          # ======================================
+          # FIX TERMUX ARCHITECTURE STATE
+          # ======================================
+
+          echo ""
+          echo "Fixing Termux architecture state..."
+
+          TERMUX_ARCH_FILE="$RUNNER_TEMP/TERMUX_ARCH"
+
+          echo "aarch64" > "$TERMUX_ARCH_FILE"
+
+          echo ""
+          echo "Architecture file:"
+          cat "$TERMUX_ARCH_FILE"
+
+          # The Termux build helper currently expects
+          # /data/TERMUX_ARCH. GitHub Actions does not
+          # provide that Termux-specific path.
+          #
+          # Replace only the hard-coded path used by
+          # termux_step_handle_buildarch.sh.
+
+          if grep -q '/data/TERMUX_ARCH' \
+            scripts/build/termux_step_handle_buildarch.sh; then
+
+            echo ""
+            echo "Patching termux_step_handle_buildarch.sh..."
+
+            sed -i \
+              "s#/data/TERMUX_ARCH#$TERMUX_ARCH_FILE#g" \
+              scripts/build/termux_step_handle_buildarch.sh
+
+          fi
+
+          echo ""
+          echo "Architecture handler:"
+          grep -n "TERMUX_ARCH" \
+            scripts/build/termux_step_handle_buildarch.sh \
+            || true
 
           echo ""
           echo "Starting Termux build..."
@@ -557,7 +597,8 @@ jobs:
             -type f \
             \( \
               -name "*.debuginfo" \
-              -o -name "*.debug" \
+              -o \
+              -name "*.debug" \
             \) \
             -delete
 
@@ -759,4 +800,3 @@ jobs:
             android-jdk17-arm64.zip.sha256
 
           generate_release_notes: true
-

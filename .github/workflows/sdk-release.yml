@@ -129,10 +129,6 @@ jobs:
             android-sdk/platform-tools
 
 
-          test -f \
-            android-sdk/build-tools/35.0.0/aapt2
-
-
           echo ""
           echo "SDK structure OK."
 
@@ -152,11 +148,8 @@ jobs:
 
           cd ..
 
-
           echo ""
-          echo "================================"
-          echo "ZIP CREATED"
-          echo "================================"
+          echo "ZIP created:"
 
           ls -lh android-sdk.zip
 
@@ -191,18 +184,18 @@ jobs:
 
 
           echo ""
-          echo "Checking aapt2..."
+          echo "Checking build-tools..."
 
           unzip -l android-sdk.zip | \
-            grep "build-tools/35.0.0/aapt2"
+            grep "build-tools/35.0.0"
 
 
           echo ""
-          echo "ZIP verification successful."
+          echo "ZIP verification OK."
 
 
       # ============================================
-      # SETUP GITHUB CLI
+      # CHECK GITHUB CLI
       # ============================================
 
       - name: Check GitHub CLI
@@ -212,10 +205,90 @@ jobs:
 
 
       # ============================================
-      # CREATE OR UPDATE RELEASE
+      # CHECK EXISTING RELEASE
       # ============================================
 
-      - name: Upload android-sdk.zip to GitHub Release
+      - name: Check existing GitHub Release
+        id: release_check
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+        run: |
+
+          if gh release view v1.0.0 >/dev/null 2>&1
+          then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+
+            echo ""
+            echo "Release v1.0.0 already exists."
+
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+
+            echo ""
+            echo "Release v1.0.0 does not exist."
+
+          fi
+
+
+      # ============================================
+      # CREATE RELEASE
+      # ============================================
+
+      - name: Create GitHub Release
+        if: steps.release_check.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+
+        with:
+
+          tag_name: v1.0.0
+
+          name: Android SDK 35
+
+          body: |
+            Android SDK package for AndroidAIDE.
+
+            SDK Platform:
+            android-35
+
+            Build Tools:
+            35.0.0
+
+            Platform Tools:
+            Included
+
+          files: |
+            android-sdk.zip
+
+          make_latest: true
+
+
+      # ============================================
+      # REMOVE OLD ZIP
+      # ============================================
+
+      - name: Remove old SDK ZIP
+        if: steps.release_check.outputs.exists == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+        run: |
+
+          echo "Removing old android-sdk.zip..."
+
+          gh release delete-asset \
+            v1.0.0 \
+            android-sdk.zip \
+            --yes \
+            || true
+
+
+      # ============================================
+      # UPLOAD NEW ZIP
+      # ============================================
+
+      - name: Upload new android-sdk.zip
+        if: steps.release_check.outputs.exists == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -223,79 +296,11 @@ jobs:
 
           set -e
 
-          echo "================================"
-          echo "GITHUB RELEASE"
-          echo "================================"
+          echo "Uploading android-sdk.zip..."
 
-
-          # ==========================================
-          # CHECK RELEASE
-          # ==========================================
-
-          if gh release view v1.0.0 >/dev/null 2>&1
-          then
-
-            echo ""
-            echo "Release v1.0.0 already exists."
-
-
-            # ======================================
-            # DELETE OLD ZIP
-            # ======================================
-
-            echo ""
-            echo "Removing old android-sdk.zip..."
-
-            gh release delete-asset \
-              v1.0.0 \
-              android-sdk.zip \
-              --yes \
-              || true
-
-
-            # ======================================
-            # UPLOAD NEW ZIP
-            # ======================================
-
-            echo ""
-            echo "Uploading new android-sdk.zip..."
-
-            gh release upload \
-              v1.0.0 \
-              android-sdk.zip
-
-
-          else
-
-            # ======================================
-            # CREATE NEW RELEASE
-            # ======================================
-
-            echo ""
-            echo "Release v1.0.0 does not exist."
-
-
-            echo ""
-            echo "Creating GitHub Release..."
-
-
-            gh release create \
-              v1.0.0 \
-              android-sdk.zip \
-              --title "Android SDK 35" \
-              --notes "Android SDK package for AndroidAIDE.
-
-SDK Platform:
-android-35
-
-Build Tools:
-35.0.0
-
-Platform Tools:
-Included"
-
-
-          fi
+          gh release upload \
+            v1.0.0 \
+            android-sdk.zip
 
 
       # ============================================
@@ -310,7 +315,7 @@ Included"
 
           echo ""
           echo "================================"
-          echo "RELEASE SUCCESS"
+          echo "ANDROID SDK RELEASE"
           echo "================================"
 
           gh release view v1.0.0
